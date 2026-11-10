@@ -14,7 +14,7 @@ static char *copy_range(const char *text, size_t start, size_t end)
 
     if (out == NULL)
     {
-        perror("minishell: malloc");
+        perror("meBash: malloc");
         exit(EXIT_FAILURE);
     }
     memcpy(out, text + start, subtext_len);
@@ -33,7 +33,7 @@ static void push(TokenList *list, TokenType type, char *value, size_t pos)
 
         if (bigger == NULL)
         {
-            perror("minishell: realloc");
+            perror("meBash: realloc");
             exit(EXIT_FAILURE);
         }
         list->tokens = bigger;

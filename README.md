@@ -13,8 +13,8 @@ Recreate the Bash shell.
 Work through the core pipeline in order:
 
 1. **Take input** — read a line of text from the user.
-2. **Lexer** — split the input text into tokens (words, pipes, redirections, operators, etc.).
-3. **Expansion** — expand the tokens (variables, quoting, globbing, etc.).
+2. **Lexer** — split the input text into tokens (words, pipes, redirections, operators, etc.). The lexer only splits: it does not expand or unquote anything.
+3. **Expansion** — expand the tokens (quote removal, variables, word splitting, globbing, etc.). Expansion is a separate stage that consumes the lexer's tokens.
 4. **Parser** — turn the expanded tokens into structured data the shell understands.
 5. **Execution** — use the parsed data to run processes and subprocesses.
 
@@ -32,7 +32,7 @@ Once the skeleton works end to end:
 | Stage | Status | Notes |
 | --- | --- | --- |
 | Take input | ✅ Working | Reads a line from stdin into a growable buffer |
-| Lexer | 🟡 Mostly working | Tokenizes words and shell operators; no quote removal yet |
+| Lexer | 🟡 Mostly working | Splits words and shell operators only; no expansion or quote removal |
 | Expansion | ⬜ Not started | `expand.c` / `expand.h` are empty |
 | Parser | ⬜ Not started | `parser.c` / `parser.h` are empty |
 | Execution | ⬜ Not started | The shell only lexes and prints tokens |
@@ -59,6 +59,8 @@ Not supported yet:
 
 ### 2. Lexer — 🟡 Implemented, needs refinement
 
+The lexer's only job is to split the input into tokens. It does not expand them: it preserves the raw text of each token, so quotes, backslashes, and `$` are left exactly as typed. Quote removal, variable expansion, word splitting, and globbing all belong to the expansion stage (section 3).
+
 What works today:
 
 - Splits input into words and operators.
@@ -66,26 +68,29 @@ What works today:
 - Matches two-character operators before one-character ones (longest match / maximal munch).
 - Skips whitespace between tokens.
 - Tokens store their type, heap-allocated value, and starting position.
-- Handles single and double quotes while scanning a word, including escaped quotes inside double quotes.
+- Tracks single and double quotes while scanning a word so that quoted spaces and operators do not end the word; escaped quotes inside double quotes are handled during scanning only.
 - Reports unterminated quotes with the quote character and its position, and frees any partial token list.
-- Backslash escapes stop the next character from ending or splitting a word.
+- Backslash escapes stop the next character from ending or splitting a word; the backslash itself stays in the token value.
 - Token list grows dynamically (doubling from an initial capacity of `32`).
 - Provides `free_tokens()` and `print_tokens()` helpers.
 
-Not supported yet:
+Not supported yet (and intentionally not the lexer's job):
 
-- Quote removal: quotes and backslashes are kept inside the token value.
-- Variable expansion (`$VAR`), command substitution (`$(...)`), or arithmetic expansion.
+- Quote removal: quotes and backslashes are kept inside the token value; removing them is part of expansion.
+- Variable expansion (`$VAR`), command substitution (`$(...)`), and arithmetic expansion: these are left untouched in the token value for the expansion stage.
 - Comments (`#`) and heredoc bodies (only the `<<` operator is recognized).
 - Newline tokens and operator placement validation (for example, a leading `|` is currently accepted as a token).
-- Context-aware quote handling after lexing; the lexer only scans over quoted sections.
+- Preserving quote context for later stages; the lexer only scans over quoted sections and records the raw text.
 
 ### 3. Expansion — ⬜ Not started
 
 `src/text_process_pipeline/expand.c` and `include/text_process_pipeline/expand.h` are empty.
 
+Expansion takes the raw tokens produced by the lexer and rewrites them into the argv words used for execution. The lexer does not do any of this; it only splits the input.
+
 Planned support:
 
+- Quote removal (strip quotes and escape backslashes kept by the lexer).
 - Variable expansion (`$VAR`, `${VAR}`).
 - Tilde expansion (`~`).
 - Quote removal.
@@ -144,7 +149,7 @@ src/
 ├── meBash.c                     # Entry point and shell loop
 └── text_process_pipeline/
     ├── input.c                  # Read user input (implemented)
-    ├── lexer.c                  # Tokenize input (implemented)
+    ├── lexer.c                  # Split input into tokens (implemented)
     ├── expand.c                 # Expand tokens (empty)
     └── parser.c                 # Parse tokens (empty)
 include/
